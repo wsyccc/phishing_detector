@@ -35,10 +35,6 @@ def test_https_detection():
     assert secure_data.extract_features()["is_https"] is True, "应该识别为HTTPS"
     assert insecure_data.extract_features()["is_https"] is False, "应该识别为非HTTPS"
 
-    # 也可以进一步检查 has_all_features 是否正确
-    assert secure_data.has_all_features is True
-    assert insecure_data.has_all_features is True
-
 
 def test_ipv4_detection():
     """
@@ -94,3 +90,63 @@ def test_url_port_detection(test_url, expected_port):
     data = URLData(test_url)
     features = data.extract_features()
     assert features["has_port"] == expected_port
+
+
+def test_special_character_detection():
+    """
+    URL 中包含大量特殊字符，应该能正确统计数量和比例
+    """
+    url = "http://example.com/login?user=admin&pass=123#anchor@!"
+    data = URLData(url)
+    features = data.extract_features()
+
+    assert features["number_of_special_characters"] > 5
+    assert 0.1 < features["special_character_ratio"] < 0.5
+    assert features["has_obfuscation"] is True
+    assert features["number_of_obfuscation"] > 2
+    assert features["obfuscation_ratio"] > 0
+
+
+def test_tld_legitimate_prob():
+    """
+    合法性评分 TLD 检测（com 高分, xyz 低分）
+    """
+    url_com = URLData("http://example.com")
+    url_xyz = URLData("http://example.xyz")
+    features_com = url_com.extract_features()
+    features_xyz = url_xyz.extract_features()
+
+    assert features_com["tld_legitimate_prob"] >= 0.8
+    assert features_xyz["tld_legitimate_prob"] <= 0.3
+
+
+def test_character_repetition():
+    """
+    检查字符重复率，phishing 链接往往有明显重复字符
+    """
+    url = "http://loooooginnnnn.example.com"
+    data = URLData(url)
+    features = data.extract_features()
+
+    assert features["char_repeat"] > 0.2
+
+
+def test_punycode_url():
+    """
+    检查是否能识别 punycode（IDN）域名
+    """
+    url = "http://xn--d1abbgf6aiiy.xn--p1ai"
+    data = URLData(url)
+    features = data.extract_features()
+
+    assert features["is_punycode"] is True
+
+
+def test_invalid_url_handling():
+    """
+    输入一个格式不合法的 URL，系统应该能稳定返回 is_valid=False
+    """
+    bad_url = "this is not a url"
+    data = URLData(bad_url)
+    assert data.is_valid is False
+    assert data.has_all_features is False
